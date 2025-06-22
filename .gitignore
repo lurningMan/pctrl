@@ -50,3 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Visual Studio Code
+CMakePresets.json
+/.vscode/
+
+# Build artifacts
+/bin/
+/doc/html/
+/build/

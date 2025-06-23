@@ -131,7 +131,7 @@ Transition settings_menu_transitions[] = {
     {&brightness_screen, detect_1},
     {&volume_screen, detect_2},
     {&main_menu, detect_b},
-    {&main_menu, detect_q },
+    {&main_menu, detect_q},
 };
 
 Transition diagnostics_menu_transitions[] = {
@@ -175,9 +175,9 @@ Transition selftest_screen_transitions[] = {
 // Assign fields
 State main_menu = {NULL, &main_menu_on_entry, &home_screen_on_run, home_screen_on_exit, NULL, main_menu_transitions, 3};
 
-State about_menu = {NULL, &about_menu_on_entry, &about_menu_on_run, about_menu_on_exit, NULL, about_menu_transitions, 3};
-State settings_menu = {NULL, &settings_menu_on_entry, &settings_menu_on_run, settings_menu_on_exit, NULL, settings_menu_transitions, 3};
-State diagnostics_menu = {NULL, &diagnostics_menu_on_entry, &diagnostics_menu_on_run, diagnostics_menu_on_exit, NULL, diagnostics_menu_transitions, 3};
+State about_menu = {NULL, &about_menu_on_entry, &about_menu_on_run, about_menu_on_exit, NULL, about_menu_transitions, 4};
+State settings_menu = {NULL, &settings_menu_on_entry, &settings_menu_on_run, settings_menu_on_exit, NULL, settings_menu_transitions, 4};
+State diagnostics_menu = {NULL, &diagnostics_menu_on_entry, &diagnostics_menu_on_run, diagnostics_menu_on_exit, NULL, diagnostics_menu_transitions, 4};
 
 State home_screen = {&about_menu, &home_screen_on_entry, &home_screen_on_run, &home_screen_on_exit, NULL, home_screen_transitions, 2};
 State info_screen = {&about_menu, &info_screen_on_entry, &info_screen_on_run, &info_screen_on_exit, NULL, info_screen_transitions, 2};

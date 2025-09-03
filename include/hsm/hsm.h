@@ -12,6 +12,11 @@ typedef void (*EventFunc)(State *self, int event);
 typedef struct Transition {
     State *target;
     int (*condition)(void);
+    void (*action)(void);
+
+    // Optional partial entry overrides for orthogonal regions
+    State **parallel_targets;  // One per region (indexed by region index)
+    int num_parallel_targets;  // Must match number of regions in target->submachine[]
 } Transition;
 
 typedef struct State {
@@ -27,6 +32,7 @@ typedef struct State {
 
     // If this state is a composite, these fields are used
     StateMachine *submachine;
+    int num_submachines;
 } State;
 
 typedef struct StateMachine {

@@ -8,8 +8,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # First test: test_hsm
-add_executable(test_hsm
-    test/test_hsm.c
+add_executable(test_hsm_basic
+    test/test_hsm_basic.c
     src/hsm/hsm.c
 )
 
@@ -20,7 +20,7 @@ add_executable(test_fsm
 )
 
 # Optional: common compile warnings
-foreach(target test_hsm test_fsm)
+foreach(target test_hsm_basic test_fsm)
     #target_compile_options(${target} PRIVATE -Wall -Wextra -pedantic)
     target_compile_options(${target} PRIVATE)
 endforeach()

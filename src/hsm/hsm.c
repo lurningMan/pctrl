@@ -136,6 +136,19 @@ static void exit_to_common_ancestor(State *from, State *ancestor)
     /* Iterate through the intervening states between from and ancestor. */
     while (from && from != ancestor)
     {
+        // If this state has parallel regions, exit each active one
+        if ((from->submachine) && (from->num_submachines > 0))
+        {
+            for (int i = 0; i < from->num_submachines; ++i)
+            {
+                StateMachine *child_sm = &from->submachine[i];
+                if (child_sm->current_state)
+                {
+                    exit_to_common_ancestor(child_sm->current_state, NULL);  // Fully exit
+                }
+            }
+        }
+
         /* Check if the on_exit function exists before executing. */
         if (from->on_exit)
         {
@@ -195,11 +208,64 @@ static void enter_from_common_ancestor(State *to, State *ancestor)
         to->on_entry(to);
     }
 
-    /* If the destination state happens to be a state machine in its own
-    right (compound state), then initialize it. */
-    if (to->submachine) 
+    /* If the destination state happens to be a state machine or 
+       orthogonal region in its own right (compound state), then 
+       initialize it or them. */
+    if ((to->submachine) && (to->num_submachines > 0))
     {
-        state_machine_init(to->submachine);
+        for (int i = 0; i < to->num_submachines; ++i)
+        {
+            state_machine_init(&to->submachine[i]);
+        }
+    }
+}
+
+static void enter_from_common_ancestor_with_overrides(State *to,
+                                                      State *ancestor,
+                                                      State **parallel_targets,
+                                                      int num_parallel_targets) 
+    {
+    // Recursive ascent from target to ancestor
+    if (to->parent != ancestor)
+    {
+        enter_from_common_ancestor_with_overrides(
+            to->parent,
+            ancestor,
+            NULL,  // Only apply overrides at the compound state level
+            0
+        );
+    }
+
+    // Run this state's entry function
+    if (to->on_entry)
+    {
+        to->on_entry(to);
+    }
+
+    // If this is a compound state with orthogonal regions
+    if (to->submachine && to->num_submachines > 0)
+    {
+        for (int i = 0; i < to->num_submachines; ++i)
+        {
+            StateMachine *sub = &to->submachine[i];
+
+            if (parallel_targets && i < num_parallel_targets && parallel_targets[i])
+            {
+                // Use specified target state for this region
+                enter_from_common_ancestor_with_overrides(
+                    parallel_targets[i],
+                    NULL,  // We are entering from the root of this region
+                    NULL,
+                    0
+                );
+                sub->current_state = parallel_targets[i];  // Maintain state tracking
+            }
+            else
+            {
+                // Default initial entry
+                state_machine_init(sub);
+            }
+        }
     }
 }
 
@@ -212,6 +278,46 @@ void state_machine_init(StateMachine *sm)
     if (sm->current_state)
     {
         enter_from_common_ancestor(sm->current_state, NULL);
+    }
+}
+
+void state_machine_init_with_overrides(
+    StateMachine *sm,
+    State **parallel_targets,
+    int num_parallel_targets
+) {
+    if (!sm || !sm->initial_state)
+        return;
+
+    sm->current_state = sm->initial_state;
+
+    if (sm->current_state->on_entry)
+    {
+        sm->current_state->on_entry(sm->current_state);
+    }
+
+    // Initialize child state machines (orthogonal regions) if present
+    if (sm->current_state->submachine && sm->current_state->num_submachines > 0)
+    {
+        for (int i = 0; i < sm->current_state->num_submachines; ++i)
+        {
+            StateMachine *sub = &sm->current_state->submachine[i];
+
+            if (parallel_targets && i < num_parallel_targets && parallel_targets[i])
+            {
+                enter_from_common_ancestor_with_overrides(
+                    parallel_targets[i],
+                    NULL,  // No ancestor since we’re doing a full initialization
+                    NULL,
+                    0
+                );
+                sub->current_state = parallel_targets[i];
+            }
+            else
+            {
+                state_machine_init(sub);  // Default behavior
+            }
+        }
     }
 }
 
@@ -263,44 +369,54 @@ void state_machine_tick(StateMachine *sm)
     State *current = sm->current_state;
 
     // Evaluate transitions from current state
-    for (int i = 0; i < current->num_transitions; ++i) 
+    for (int idx_trans = 0; idx_trans < current->num_transitions; ++idx_trans) 
     {
-        Transition *t = &current->transitions[i];
+        Transition *t = &current->transitions[idx_trans];
         if (t->condition && t->condition())
         {
-            // Exit current state
-            if (current->on_exit)
-            {
-                current->on_exit(current);
-            }
+            State *target = t->target;
 
+            // === Determine common ancestor ===
+            State *ancestor = find_common_ancestor(current, target);
+
+            // === Exit from current to ancestor ===
+            exit_to_common_ancestor(current, ancestor);
+
+            // === Optional transition action ===
+            //if (t->action)
+            //{
+            //    t->action();
+            //}
+
+            // === Update state machine ===
             sm->previous_state = current;
-            sm->current_state = t->target;
+            sm->current_state = target;
 
-            // Enter new state
-            if (sm->current_state->on_entry)
-            {
-                sm->current_state->on_entry(sm->current_state);
-            }
+            // === Enter from ancestor to target ===
+            enter_from_common_ancestor_with_overrides(
+            target,
+            ancestor,
+            t->parallel_targets,
+            t->num_parallel_targets);
 
-            // Optional: initialize submachine
-            if (sm->current_state->submachine)
-            {
-                state_machine_init(sm->current_state->submachine);
-            }
-            return;
+            return; // Transition taken
         }
     }
-
-    // If no transition taken, run the state
+    
+    // If no transition was taken, run the current state's logic
     if (current->on_run)
     {
         current->on_run(current);
     }
-    // If this state has a submachine, tick it
+
+    // Tick any active submachines (e.g. orthogonal regions)
     if (current->submachine)
     {
-        state_machine_tick(current->submachine);
+        for (int idx_sub = 0; idx_sub < current->num_submachines; ++idx_sub)
+        {
+            StateMachine *sub = &current->submachine[idx_sub];
+            state_machine_tick(sub);
+        }
     }
 }
 
